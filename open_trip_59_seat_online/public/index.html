@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Open Trip — Pilih Kursi</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f5f8;color:#172033;font-family:Arial,sans-serif}.wrap{max-width:760px;margin:auto;padding:14px}.card{background:#fff;border-radius:18px;padding:17px;margin-bottom:14px;box-shadow:0 5px 20px #0001}h1{margin:0 0 5px;font-size:24px}.muted{color:#687386;font-size:13px}.legend{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0}.legend span{font-size:12px;display:flex;gap:5px;align-items:center}.dot{width:15px;height:15px;border-radius:4px}.a{background:#22c55e}.s{background:#3b82f6}.p{background:#facc15}.o{background:#ef4444}.bus{max-width:430px;margin:auto;background:#e5e7eb;border:3px solid #374151;border-radius:28px;padding:15px 9px}.front{text-align:center;font-size:12px;font-weight:bold;margin-bottom:10px}.row{display:grid;grid-template-columns:1fr 1fr 18px 1fr 1fr 1fr;gap:5px;margin:5px 0}.seat,.door{height:40px;border-radius:8px}.seat{border:0;background:#22c55e;color:#fff;font-size:11px;font-weight:bold}.seat.selected{background:#3b82f6}.seat.pending{background:#facc15;color:#111;cursor:not-allowed}.seat.paid{background:#ef4444;cursor:not-allowed}.door{grid-column:1/3;border:2px dashed #9ca3af;display:flex;align-items:center;justify-content:center;font-size:9px;color:#687386}.back{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-top:5px}.back .seat{width:100%}label{display:block;font-size:13px;font-weight:bold;margin:11px 0 5px}input,textarea{width:100%;padding:11px;border:1px solid #d2d7df;border-radius:10px;font-size:14px}textarea{min-height:70px}input[readonly]{background:#f1f3f6}.btn{width:100%;padding:13px;border:0;border-radius:11px;background:#111827;color:#fff;font-weight:bold;margin-top:13px}.msg{margin-top:10px;padding:11px;border-radius:10px;background:#eff6ff;color:#1e40af;font-size:12px;display:none}.small{font-size:11px;color:#697386;margin-top:8px}@media(max-width:400px){.wrap{padding:9px}.card{padding:13px}.seat,.door{height:37px}.row{gap:4px}.back{gap:4px}}
+</style>
+</head>
+<body><div class="wrap">
+<div class="card"><h1>🚌 Open Trip</h1><div class="muted">Pilih kursi yang tersedia</div>
+<div class="legend"><span><i class="dot a"></i>Kosong</span><span><i class="dot s"></i>Dipilih</span><span><i class="dot p"></i>Menunggu Bayar</span><span><i class="dot o"></i>Terisi</span></div>
+<div class="bus"><div class="front">DEPAN / DRIVER</div><div id="layout"></div><div class="back" id="back"></div></div>
+<div class="small">Kursi kuning sedang di-hold maksimal 15 menit. Kursi merah sudah dikonfirmasi admin.</div>
+</div>
+<div class="card"><b>Data Pemesan</b>
+<label>Nama Lengkap</label><input id="nama" placeholder="Masukkan nama lengkap">
+<label>No. Handphone</label><input id="nohp" type="tel" placeholder="08xxxxxxxxxx">
+<label>Alamat</label><textarea id="alamat" placeholder="Masukkan alamat"></textarea>
+<label>Jumlah Kursi Dipesan</label><input id="jumlah" value="0" readonly>
+<label>Kursi Terpilih</label><input id="kursi" value="Belum ada kursi dipilih" readonly>
+<button class="btn" onclick="pesan()">Pesan Kursi</button><div id="msg" class="msg"></div>
+</div></div>
+<script>
+const selected=new Set();let blocked={};
+function btn(n){const b=document.createElement("button");b.className="seat";b.textContent=n;b.onclick=()=>toggle(n,b);b.dataset.n=n;return b}
+let n=1,lay=document.getElementById("layout");
+for(let r=0;r<10;r++){let row=document.createElement("div");row.className="row";row.append(btn(n++),btn(n++));let x=document.createElement("div");row.append(x);row.append(btn(n++),btn(n++),btn(n++));lay.append(row)}
+let row=document.createElement("div");row.className="row";let door=document.createElement("div");door.className="door";door.textContent="PINTU";row.append(door);let x=document.createElement("div");row.append(x);row.append(btn(51),btn(52),btn(53));lay.append(row);
+for(let i=54;i<=59;i++)document.getElementById("back").append(btn(i));
+function toggle(n,b){if(blocked[n])return;if(selected.has(n)){selected.delete(n);b.classList.remove("selected")}else{selected.add(n);b.classList.add("selected")}update()}
+function update(){let a=[...selected].sort((x,y)=>x-y);jumlah.value=a.length;kursi.value=a.length?a.join(", "):"Belum ada kursi dipilih"}
+function paint(){document.querySelectorAll(".seat").forEach(b=>{let n=+b.dataset.n;b.classList.remove("pending","paid","selected");b.disabled=false;if(blocked[n]){b.classList.add(blocked[n].status);b.disabled=true}else if(selected.has(n))b.classList.add("selected")})}
+async function refresh(){try{let r=await fetch("/api/seats");let d=await r.json();blocked={};for(let [s,v] of Object.entries(d.seats))blocked[s]={status:v.status};for(const s of [...selected])if(blocked[s])selected.delete(s);paint();update()}catch(e){}}
+async function pesan(){let a=[...selected].sort((x,y)=>x-y),data={nama:nama.value.trim(),nohp:nohp.value.trim(),alamat:alamat.value.trim(),seats:a};if(!data.nama||!data.nohp||!data.alamat||!a.length)return show("Lengkapi data dan pilih kursi dulu bro.");try{let r=await fetch("/api/bookings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}),d=await r.json();if(!r.ok)return show(d.error+(d.taken?" Kursi: "+d.taken.join(", "):""));show("Booking #"+d.booking_id+" berhasil. Kursi di-hold 15 menit. Segera lakukan pembayaran dan kirim bukti ke admin.");selected.clear();document.querySelectorAll("input,textarea").forEach(x=>{if(!x.readOnly)x.value=""});update();refresh()}catch(e){show("Server sedang bermasalah. Coba lagi.")}}
+function show(t){msg.style.display="block";msg.textContent=t}
+refresh();setInterval(refresh,3000);
+</script></body></html>
